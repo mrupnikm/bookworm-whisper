@@ -1,0 +1,69 @@
+# -------------------------
+# Python
+# -------------------------
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+*.pdb
+*.pkl
+*.egg-info/
+*.egg
+*.log
+
+# Virtual environments
+venv/
+.env/
+.venv/
+
+# Build / packaging
+build/
+dist/
+pip-wheel-metadata/
+*.whl
+
+# -------------------------
+# Project-specific
+# -------------------------
+
+# EPUB input files (you don't want books in git)
+epubs/
+books/
+*.epub
+komga/
+audiobookshelf/
+
+# Audiobook output (generated files)
+output/
+*.mp3
+*.wav
+*.ogg
+*.m4a
+
+# Converter logs
+logs/
+*.log
+
+# Temporary converter artifacts
+tmp/
+temp/
+cache/
+tts_cache/
+ffmpeg_temp/
+*.tmp
+
+# -------------------------
+# OS junk
+# -------------------------
+.DS_Store
+Thumbs.db
+desktop.ini
+
+# -------------------------
+# IDE / Editor
+# -------------------------
+.vscode/
+.idea/
+*.swp
+*.swo
+

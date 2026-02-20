@@ -1,0 +1,56 @@
+{% extends "base.html" %}
+
+{% block title %}Convert {{ filename }} - EPUB Library{% endblock %}
+
+{% block content %}
+<div class="container">
+  <div class="page-header">
+    <a href="{{ url_for('main.index') }}" class="back-link">← Back to Library</a>
+    <h2>Convert {{ filename }}</h2>
+  </div>
+
+  <form id="convert-form" class="convert-form" action="/convert" method="POST">
+    <input type="hidden" name="file_name" value="{{ filename }}" />
+
+    <div class="file-info">
+      <label>Selected File</label>
+      <div class="file-display">{{ filename }}</div>
+    </div>
+
+    <label for="voice_model">Voice Model <a href="https://huggingface.co/spaces/hexgrad/Kokoro-TTS" target="_blank" class="help-link">(examples)</a></label>
+    <input type="text" id="voice_model" name="voice_model" value="af_heart" />
+
+    <div class="chapter-range">
+      <div class="chapter-field">
+        <label for="chapter_start">Chapter Start</label>
+        <input type="number" id="chapter_start" name="chapter_start" value="1" min="1" />
+      </div>
+      <div class="chapter-field">
+        <label for="chapter_end">Chapter End</label>
+        <input type="number" id="chapter_end" name="chapter_end" value="-1" />
+      </div>
+    </div>
+
+    <label for="speed">Speed</label>
+    <input type="number" id="speed" name="speed" value="1.0" min="0.25" max="4.0" step="0.05" />
+
+    <label for="title_mode">Title Mode</label>
+    <select id="title_mode" name="title_mode">
+      <option value="auto">Auto</option>
+      <option value="tag_text">Tag Text</option>
+      <option value="first_few">First Few</option>
+    </select>
+
+    <button type="submit">Convert</button>
+  </form>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+  // Start polling when form is submitted
+  document.getElementById('convert-form').addEventListener('submit', function() {
+    setTimeout(startPolling, 500);
+  });
+</script>
+{% endblock %}

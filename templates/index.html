@@ -1,0 +1,178 @@
+{% extends "base.html" %}
+
+{% block title %}EPUB Library - Books{% endblock %}
+
+{% block content %}
+<div class="container">
+  <!-- Upload Section -->
+  <div class="upload-section">
+    <h3>Upload New Book</h3>
+    <form id="upload-form" class="upload-form" action="/upload" method="POST" enctype="multipart/form-data">
+      <div class="upload-area">
+        <input type="file" name="epub_file" accept=".epub" required id="file-input" />
+        <label for="file-input" class="upload-label">
+          <div class="upload-icon">📚</div>
+          <div class="upload-text">
+            <span class="upload-main-text" id="upload-main-text">Choose EPUB file or drag and drop</span>
+            <span class="upload-sub-text" id="upload-sub-text">Supported format: .epub</span>
+          </div>
+        </label>
+        <button type="submit" class="upload-button" id="upload-button" style="display: none;">Upload Book</button>
+      </div>
+    </form>
+  </div>
+
+  <!-- Books Section -->
+  <div class="books-section">
+    <div class="section-header">
+      <h3>Your Library</h3>
+      <div class="section-actions">
+        <input type="text" id="filename-filter" class="filter-input" placeholder="Filter by filename...">
+        <label class="show-hidden-toggle" title="Show hidden books">
+          <input type="checkbox" id="show-hidden-checkbox" {% if show_hidden %}checked{% endif %}>
+          <span>Show hidden</span>
+        </label>
+        <a href="/sync-all" class="sync-button" title="Sync all reading progress from external services">🔄 Sync All</a>
+      </div>
+    </div>
+    {% if files %}
+    <table id="files-table">
+      <tr>
+        <th>File</th>
+        <th>Komga Progress</th>
+        <th>Audiobookshelf Progress</th>
+        <th>Sync</th>
+        <th>Actions</th>
+      </tr>
+      {% for file in files %}
+      {% set book_data = book_metadata.get(file, {}) %}
+      {% set reading_progress = book_data.get('reading_progress', {}) %}
+      {% set komga_progress = reading_progress.get('komga', {}) %}
+      {% set audiobookshelf_progress = reading_progress.get('audiobookshelf', {}) %}
+      {% set komga_current = komga_progress.get('current_chapter_num', 0) %}
+      {% set komga_total = komga_progress.get('num_chapters', 0) %}
+      {% set abs_current = audiobookshelf_progress.get('current_chapter_num', 0) %}
+      {% set abs_total = audiobookshelf_progress.get('num_chapters', 0) %}
+      {% set komga_chapter_name = komga_progress.get('current_chapter', '') or '' %}
+      {% set abs_chapter_name = audiobookshelf_progress.get('current_chapter', '') or '' %}
+      {% set sync_enabled = book_data.get('sync_enabled', False) %}
+      {% set both_found = komga_progress.get('found', false) and audiobookshelf_progress.get('found', false) %}
+      {% set komga_status = komga_progress.get('status', '') %}
+      {% set abs_status = audiobookshelf_progress.get('status', '') %}
+      {% set komga_incompatible = book_data.get('komga_incompatible', False) %}
+      {% set both_status_completed = komga_status == 'Completed' and abs_status == 'Completed' %}
+      {% set komga_at_end = komga_total > 0 and komga_current == komga_total %}
+      {% set abs_at_end = abs_total > 0 and abs_current == abs_total %}
+      {% set both_at_end = komga_at_end and abs_at_end %}
+      {% set same_chapter = both_found and komga_current > 0 and komga_current == abs_current %}
+      {% set is_synced = both_status_completed or both_at_end or same_chapter %}
+
+      <tr class="{% if komga_incompatible %}komga-incompatible-row{% endif %}">
+        <td class="filename-cell" data-label="File" title="{{ file }}">{{ file }}</td>
+        <td class="progress-cell {% if komga_incompatible %}komga-incompatible{% elif is_synced %}sync-status-synced{% endif %}" data-label="Komga">
+          <div class="progress-container">
+            {% if komga_incompatible %}
+              <div class="chapter-title komga-chapter incompatible-text">Incompatible</div>
+              <div class="progress-indicator incompatible-text">Not Divina compatible</div>
+              <div class="progress-bar-container">
+                <div class="progress-bar komga-progress-bar incompatible-bar" style="width: 0%"></div>
+              </div>
+            {% elif komga_progress.get('found', false) %}
+              <div class="chapter-title komga-chapter">{{ komga_progress.get('current_chapter', 'Unknown') or 'Unknown' }}</div>
+              <div class="progress-indicator">
+                {% if komga_total > 0 %}
+                  {{ komga_current }}/{{ komga_total }}
+                {% else %}
+                  {% if komga_progress.get('status', '') != '' %}
+                    {{ komga_progress.get('status', 'Reading') }}
+                  {% else %}
+                    Not started
+                  {% endif %}
+                {% endif %}
+              </div>
+              <div class="progress-bar-container">
+                {% set progress_percent = (komga_current / komga_total * 100) if komga_total > 0 else 0 %}
+                <div class="progress-bar komga-progress-bar" style="width: {{ progress_percent }}%"></div>
+              </div>
+            {% else %}
+              <div class="chapter-title komga-chapter">No data</div>
+              <div class="progress-indicator">
+                <span class="komga-pages">-</span>
+              </div>
+              <div class="progress-bar-container">
+                <div class="progress-bar komga-progress-bar" style="width: 0%"></div>
+              </div>
+            {% endif %}
+          </div>
+        </td>
+        <td class="progress-cell {% if komga_incompatible %}komga-incompatible{% elif is_synced %}sync-status-synced{% endif %}" data-label="Audiobookshelf">
+          <div class="progress-container">
+            {% if komga_incompatible %}
+              <div class="chapter-title audiobookshelf-chapter incompatible-text">Sync unavailable</div>
+              <div class="progress-indicator incompatible-text">Komga incompatible</div>
+              <div class="progress-bar-container">
+                <div class="progress-bar audiobookshelf-progress-bar incompatible-bar" style="width: 0%"></div>
+              </div>
+            {% elif audiobookshelf_progress.get('found', false) %}
+              <div class="chapter-title audiobookshelf-chapter">{{ audiobookshelf_progress.get('current_chapter', 'Unknown') or 'Unknown' }}</div>
+              <div class="progress-indicator">
+                {% if abs_total > 0 %}
+                  {{ abs_current }}/{{ abs_total }}
+                {% else %}
+                  {% if audiobookshelf_progress.get('status', '') != '' %}
+                    {{ audiobookshelf_progress.get('status', 'Listening') }}
+                  {% else %}
+                    Not started
+                  {% endif %}
+                {% endif %}
+              </div>
+              <div class="progress-bar-container">
+                {% set progress_percent = (abs_current / abs_total * 100) if abs_total > 0 else 0 %}
+                <div class="progress-bar audiobookshelf-progress-bar" style="width: {{ progress_percent }}%"></div>
+              </div>
+            {% else %}
+              <div class="chapter-title audiobookshelf-chapter">No data</div>
+              <div class="progress-indicator">
+                <span class="audiobookshelf-position">-</span>
+              </div>
+              <div class="progress-bar-container">
+                <div class="progress-bar audiobookshelf-progress-bar" style="width: 0%"></div>
+              </div>
+            {% endif %}
+          </div>
+        </td>
+        <td class="sync-cell" data-label="Sync">
+          {% if komga_incompatible %}
+          <span class="sync-unavailable" title="Komga cannot track progress for this EPUB format">-</span>
+          {% elif book_metadata.get(file, {}).get('sync_available', False) %}
+          <input type="checkbox"
+                 class="sync-checkbox"
+                 data-file="{{ file }}"
+                 {% if sync_enabled %}checked{% endif %}
+                 title="Enable sync for this book">
+          {% else %}
+          <span class="sync-unavailable" title="Book not found on both Komga and Audiobookshelf">-</span>
+          {% endif %}
+        </td>
+        <td class="actions-cell" data-label="Actions">
+          <a href="/convert/{{ file }}" class="action-button">Convert</a>
+          <button class="hide-button {% if book_data.get('hidden', False) %}hidden-state{% endif %}"
+                  data-file="{{ file }}"
+                  data-hidden="{{ 'true' if book_data.get('hidden', False) else 'false' }}"
+                  title="{{ 'Show this book' if book_data.get('hidden', False) else 'Hide this book' }}">
+            {{ 'Show' if book_data.get('hidden', False) else 'Hide' }}
+          </button>
+        </td>
+      </tr>
+      {% endfor %}
+    </table>
+    {% else %}
+    <div class="empty">
+      <div class="empty-icon">📖</div>
+      <div class="empty-text">No EPUB files found in the library.</div>
+      <div class="empty-sub-text">Upload your first book above to get started!</div>
+    </div>
+    {% endif %}
+  </div>
+</div>
+{% endblock %}

@@ -1,0 +1,83 @@
+<!doctype html>
+<html>
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>{% block title %}BookWorm Whisper{% endblock %}</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <link href="https://fonts.googleapis.com/icon?family=Material+Icons+Round" rel="stylesheet">
+    <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}" />
+  </head>
+
+  <body>
+    <div class="app-container">
+      <header class="app-header">
+        <div class="header-content">
+          <h1><a href="{{ url_for('main.index') }}" class="home-link">BookWorm Whisper</a></h1>
+        </div>
+        {% include '_header.html' %}
+      </header>
+
+      <main class="app-main">
+        {% block content %}{% endblock %}
+      </main>
+
+      <footer class="app-footer">
+        <div class="version-info" title="Compatible versions this release was tested against">
+          <span class="version-label">v{{ versions.bookworm_whisper }}</span>
+          <span class="version-details">K:{{ versions.komga }} AB:{{ versions.audiobookshelf }} TTS:{{ versions.kokoro_tts }}</span>
+        </div>
+      </footer>
+    </div>
+
+    <script src="{{ url_for('static', filename='main.js') }}"></script>
+    <script>
+      async function checkHealth(endpoint, indicatorId, affectsForm = false) {
+        const indicator = document.getElementById(indicatorId);
+        const convertForm = document.getElementById('convert-form');
+
+        try {
+          const response = await fetch(endpoint);
+          const data = await response.json();
+
+          if (data.status === 'live') {
+            indicator.textContent = 'Live';
+            indicator.className = 'status-indicator live';
+            if (affectsForm && convertForm) convertForm.style.display = 'block';
+          } else if (data.status === 'not_configured') {
+            indicator.textContent = 'Not Configured';
+            indicator.className = 'status-indicator offline';
+            if (affectsForm && convertForm) convertForm.style.display = 'none';
+          } else if (data.status === 'timeout') {
+            indicator.textContent = 'Timeout';
+            indicator.className = 'status-indicator error';
+            if (affectsForm && convertForm) convertForm.style.display = 'none';
+          } else {
+            indicator.textContent = 'Offline';
+            indicator.className = 'status-indicator offline';
+            if (affectsForm && convertForm) convertForm.style.display = 'none';
+          }
+        } catch (error) {
+          indicator.textContent = 'Offline';
+          indicator.className = 'status-indicator offline';
+          if (affectsForm && convertForm) convertForm.style.display = 'none';
+        }
+      }
+
+      function pingAllServices() {
+        checkHealth('/health/kokoro', 'status-indicator', true);
+        checkHealth('/health/audiobookshelf', 'status-audiobookshelf');
+        checkHealth('/health/komga', 'status-komga');
+      }
+
+      document.addEventListener('DOMContentLoaded', () => {
+        // Run initial health check once on page load
+        pingAllServices();
+        // Removed periodic health checks to eliminate log spam
+      });
+    </script>
+    {% block scripts %}{% endblock %}
+  </body>
+</html>

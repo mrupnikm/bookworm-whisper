@@ -1,0 +1,31 @@
+<!-- Service Status -->
+<div class="service-status-container">
+  <div class="service-status">
+    <span>Kokoro TTS: </span>
+    <span id="status-indicator" class="status-indicator checking">Checking...</span>
+  </div>
+  <div class="service-status">
+    <span>Audiobookshelf: </span>
+    <span id="status-audiobookshelf" class="status-indicator checking">Checking...</span>
+  </div>
+  <div class="service-status">
+    <span>Komga: </span>
+    <span id="status-komga" class="status-indicator checking">Checking...</span>
+  </div>
+</div>
+
+<!-- Progress Section -->
+<div id="progress-section" class="progress-section">
+  <div class="progress-header">
+    <span class="progress-title">Converting: <span id="progress-filename"></span></span>
+    <div class="progress-actions">
+      <button id="dismiss-button" class="dismiss-button" onclick="dismissProgress()" style="display: none;">Dismiss</button>
+      <button class="stop-button" onclick="stopProcess()">Stop</button>
+    </div>
+  </div>
+  <div class="progress-bar-container">
+    <div id="progress-bar" class="progress-bar"></div>
+  </div>
+  <div id="progress-output" class="progress-output"></div>
+  <div id="error-message" class="error-message"></div>
+</div>
