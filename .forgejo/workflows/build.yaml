@@ -1,4 +1,3 @@
-# Template: https://git.olmden.si/lib/forgejo-workflows
 name: Build and Push
 
 on:
@@ -9,28 +8,5 @@ on:
 jobs:
   build:
     runs-on: node
-    container:
-      image: docker:git
-    steps:
-      - name: Checkout
-        run: |
-          git clone --depth 1 --branch "${GITHUB_REF_NAME}" "${GITHUB_SERVER_URL}/${GITHUB_REPOSITORY}.git" .
-
-      - name: Connect to Docker
-        run: |
-          apk add --no-cache -q iproute2
-          GATEWAY=$(ip route | awk '/default/{print $3}')
-          echo "DOCKER_HOST=tcp://${GATEWAY}:2375" >> "$GITHUB_ENV"
-
-      - name: Login to Registry
-        run: >
-          echo "${{ secrets.REGISTRY_TOKEN }}" |
-          docker login git.olmden.si -u "${{ secrets.REGISTRY_USER }}" --password-stdin
-
-      - name: Build and push
-        run: |
-          IMAGE="git.olmden.si/${GITHUB_REPOSITORY}"
-          TAG="${GITHUB_REF_NAME}"
-          docker build -t "$IMAGE:$TAG" -t "$IMAGE:latest" .
-          docker push "$IMAGE:$TAG"
-          docker push "$IMAGE:latest"
+    uses: lib/forgejo-workflows/.forgejo/workflows/docker-build-push.yml@v1.0.0
+    secrets: inherit
