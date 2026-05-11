@@ -7,7 +7,7 @@ from werkzeug.utils import secure_filename
 
 from config import EPUB_DIR
 from metadata import create_metadata_template
-from services.komga import scan_all_libraries as scan_komga_libraries, is_komga_available
+from services.library import scan_all_libraries, is_library_available
 
 logger = logging.getLogger(__name__)
 
@@ -64,15 +64,14 @@ def upload():
     except Exception as e:
         flash(f"Uploaded {filename}, but failed to create metadata: {e}")
 
-    # Trigger Komga library scan to discover the new book
-    # Only if Komga API is configured and accessible
-    if is_komga_available():
+    # Trigger ebook library scan to discover the new book
+    if is_library_available():
         try:
-            scan_komga_libraries()
+            scan_all_libraries()
         except Exception as e:
-            logger.warning(f"Failed to trigger Komga library scan: {e}")
+            logger.warning(f"Failed to trigger library scan: {e}")
     else:
-        logger.debug("Komga not available, skipping library scan")
+        logger.debug("Ebook library not available, skipping scan")
 
     return redirect(url_for("main.index"))
 

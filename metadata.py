@@ -5,7 +5,7 @@ import re
 from datetime import datetime
 
 from config import EPUB_DIR
-from services.komga import find_book_progress, get_all_books, invalidate_cache as invalidate_komga_cache
+from services.library import find_book_progress, get_all_books, invalidate_cache as invalidate_ebook_cache
 from services.audiobookshelf import find_audiobook_progress
 
 logger = logging.getLogger(__name__)
@@ -267,7 +267,7 @@ def update_reading_progress(book_name, source="komga", **progress_data):
     return metadata
 
 
-def sync_komga_progress(book_name, filename):
+def sync_ebook_progress(book_name, filename):
     """Sync Komga reading progress to metadata.
 
     Returns True if book was found in Komga, False otherwise.
@@ -345,14 +345,14 @@ def ensure_metadata_for_all_books():
             # Try to sync chapter information from Komga if available
             if komga_books:
                 try:
-                    sync_komga_progress(book_name, epub_file)
+                    sync_ebook_progress(book_name, epub_file)
                 except Exception as e:
                     logger.warning(f"Could not sync Komga progress for {epub_file}: {e}")
     
     return created_files
 
 
-def sync_all_komga_data():
+def sync_all_ebook_data():
     """Sync all books' reading progress from Komga."""
     if not os.path.isdir(EPUB_DIR):
         return []
@@ -363,7 +363,7 @@ def sync_all_komga_data():
     for epub_file in epub_files:
         book_name = os.path.splitext(epub_file)[0]
         try:
-            sync_komga_progress(book_name, epub_file)
+            sync_ebook_progress(book_name, epub_file)
             updated_files.append(book_name)
             logger.debug(f"Synced Komga progress for: {book_name}")
         except Exception as e:
@@ -619,13 +619,13 @@ def update_all_sync_available():
     return updated
 
 
-def get_komga_chapters(book_name, filename):
-    """Get the full chapter list (TOC) from Komga for a book.
+def get_ebook_chapters(book_name, filename):
+    """Get the full chapter list (TOC) from the active ebook library for a book.
 
     Returns list of chapter name strings, or None if not available.
     """
     try:
-        from services.komga import get_chapters_for_book
+        from services.library import get_chapters_for_book
 
         # Try with filename first (usually more unique), then book_name
         chapters = get_chapters_for_book(filename)
@@ -635,7 +635,7 @@ def get_komga_chapters(book_name, filename):
         return chapters
 
     except Exception as e:
-        logger.error(f"Error getting Komga chapters for {book_name}: {e}")
+        logger.error(f"Error getting ebook chapters for {book_name}: {e}")
         return None
 
 
@@ -775,7 +775,7 @@ def set_komga_progress_to_chapter(book_name, filename, target_chapter):
 
                 if page_status in [200, 204]:
                     logger.info(f"Set Komga page progress for {book_name} to page {target_page}/{total_pages}")
-                    invalidate_komga_cache()
+                    invalidate_ebook_cache()
                     return True
                 else:
                     # Check for Divina compatibility error
@@ -881,7 +881,7 @@ def set_komga_progress_to_chapter(book_name, filename, target_chapter):
             logger.warning(f"Readium progression set, but page progress update failed. Status: {page_status}")
 
         # Invalidate cache so next fetch gets fresh data
-        invalidate_komga_cache()
+        invalidate_ebook_cache()
         return True
             
     except Exception as e:
@@ -972,6 +972,24 @@ def mark_komga_as_completed(book_name, filename):
         return False
 
 
+def set_ebook_progress_to_chapter(book_name, filename, target_chapter):
+    """Dispatch set-progress to the active ebook library backend."""
+    backend = os.environ.get("EBOOK_LIBRARY", "komga").lower()
+    if backend == "grimmory":
+        from services.grimmory import set_progress_to_chapter
+        return set_progress_to_chapter(book_name, filename, target_chapter)
+    return set_komga_progress_to_chapter(book_name, filename, target_chapter)
+
+
+def mark_ebook_as_completed(book_name, filename):
+    """Dispatch mark-as-completed to the active ebook library backend."""
+    backend = os.environ.get("EBOOK_LIBRARY", "komga").lower()
+    if backend == "grimmory":
+        from services.grimmory import mark_as_completed
+        return mark_as_completed(book_name, filename)
+    return mark_komga_as_completed(book_name, filename)
+
+
 def mark_audiobookshelf_as_completed(book_name):
     """Mark an Audiobookshelf book as completed."""
     try:
@@ -1033,7 +1051,7 @@ def sync_bidirectional_progress(book_name):
     filename = metadata.get("source_file", f"{book_name}.epub")
 
     # Always refresh data before sync to get current state
-    sync_komga_progress(book_name, filename)
+    sync_ebook_progress(book_name, filename)
     sync_audiobookshelf_progress(book_name, filename)
 
     # Reload metadata after refresh to get current data
@@ -1099,9 +1117,9 @@ def sync_bidirectional_progress(book_name):
             return {"action": "failed", "reason": "audiobookshelf_completion_failed"}
 
     if abs_is_completed and not komga_is_completed:
-        logger.info(f"[SYNC] {short_name}: ABS completed ({abs_status}) -> marking Komga as completed")
-        if mark_komga_as_completed(book_name, filename):
-            sync_komga_progress(book_name, filename)
+        logger.info(f"[SYNC] {short_name}: ABS completed ({abs_status}) -> marking ebook library as completed")
+        if mark_ebook_as_completed(book_name, filename):
+            sync_ebook_progress(book_name, filename)
             return {"action": "updated_komga", "reason": "synced_completion"}
         else:
             logger.warning(f"[SYNC] {short_name}: Failed to mark Komga as completed")
@@ -1122,7 +1140,7 @@ def sync_bidirectional_progress(book_name):
         if komga_svc_num == 0 and abs_svc_num > 0:
             logger.debug(f"[SYNC] One-sided progress: ABS at #{abs_svc_num} '{abs_chapter_name}', Komga at start")
             # Find the ABS chapter in Komga's chapter list by name
-            komga_chapters = get_komga_chapters(book_name, filename)
+            komga_chapters = get_ebook_chapters(book_name, filename)
             target_komga_num = None
             if komga_chapters:
                 logger.debug(f"[SYNC] {short_name}: Komga has {len(komga_chapters)} chapters")
@@ -1154,9 +1172,9 @@ def sync_bidirectional_progress(book_name):
                     logger.info(f"[SYNC] {short_name}: Komga has no TOC, using ABS position: #{target_komga_num}")
 
             if target_komga_num:
-                if set_komga_progress_to_chapter(book_name, filename, target_komga_num):
-                    sync_komga_progress(book_name, filename)
-                    logger.debug(f"[SYNC] Updated Komga to ch.{target_komga_num} (from ABS '{abs_chapter_name}')")
+                if set_ebook_progress_to_chapter(book_name, filename, target_komga_num):
+                    sync_ebook_progress(book_name, filename)
+                    logger.debug(f"[SYNC] Updated ebook library to ch.{target_komga_num} (from ABS '{abs_chapter_name}')")
                     return {"action": "updated_komga", "target_chapter": target_komga_num, "source_chapter_name": abs_chapter_name}
                 else:
                     logger.error(f"[SYNC] Failed to update Komga")
@@ -1216,7 +1234,7 @@ def sync_bidirectional_progress(book_name):
             logger.debug(f"[SYNC] Both services have progress, attempting cross-service chapter matching...")
 
             # Get full chapter lists for name-based matching
-            komga_chapters = get_komga_chapters(book_name, filename)
+            komga_chapters = get_ebook_chapters(book_name, filename)
             abs_chapters = get_audiobookshelf_chapters(book_name)
 
             if not komga_chapters or not abs_chapters:
@@ -1233,8 +1251,8 @@ def sync_bidirectional_progress(book_name):
                                 return {"action": "updated_audiobookshelf", "target_chapter": komga_svc_num, "source_chapter_name": komga_chapter_name}
                         elif abs_svc_num > komga_svc_num:
                             logger.debug(f"[SYNC] Using position fallback: ABS #{abs_svc_num} > Komga #{komga_svc_num}")
-                            if set_komga_progress_to_chapter(book_name, filename, abs_svc_num):
-                                sync_komga_progress(book_name, filename)
+                            if set_ebook_progress_to_chapter(book_name, filename, abs_svc_num):
+                                sync_ebook_progress(book_name, filename)
                                 logger.debug(f"[SYNC] SUCCESS: Updated Komga to position #{abs_svc_num}")
                                 return {"action": "updated_komga", "target_chapter": abs_svc_num, "source_chapter_name": abs_chapter_name}
                         else:
@@ -1264,10 +1282,10 @@ def sync_bidirectional_progress(book_name):
                         logger.error(f"[SYNC] ERROR: Failed to update Audiobookshelf")
                         return {"action": "failed", "reason": "audiobookshelf_update_failed"}
                 elif abs_in_komga_pos > komga_svc_num:
-                    # ABS is ahead - update Komga to where ABS's chapter is
-                    logger.debug(f"[SYNC] ACTION: ABS ahead (ch in Komga at #{abs_in_komga_pos} > Komga pos #{komga_svc_num}) -> Updating Komga")
-                    if set_komga_progress_to_chapter(book_name, filename, abs_in_komga_pos):
-                        sync_komga_progress(book_name, filename)
+                    # ABS is ahead - update ebook library to where ABS's chapter is
+                    logger.debug(f"[SYNC] ACTION: ABS ahead (ch in ebook lib at #{abs_in_komga_pos} > ebook pos #{komga_svc_num}) -> Updating ebook library")
+                    if set_ebook_progress_to_chapter(book_name, filename, abs_in_komga_pos):
+                        sync_ebook_progress(book_name, filename)
                         logger.debug(f"[SYNC] SUCCESS: Updated Komga to chapter #{abs_in_komga_pos}")
                         return {"action": "updated_komga", "target_chapter": abs_in_komga_pos, "source_chapter_name": abs_chapter_name}
                     else:
@@ -1289,9 +1307,9 @@ def sync_bidirectional_progress(book_name):
             elif abs_in_komga_pos:
                 # Only ABS chapter found in Komga - assume ABS is ahead
                 if abs_in_komga_pos > komga_svc_num:
-                    logger.debug(f"[SYNC] ACTION: ABS ahead (found in Komga at #{abs_in_komga_pos}) -> Updating Komga")
-                    if set_komga_progress_to_chapter(book_name, filename, abs_in_komga_pos):
-                        sync_komga_progress(book_name, filename)
+                    logger.debug(f"[SYNC] ACTION: ABS ahead (found in ebook lib at #{abs_in_komga_pos}) -> Updating ebook library")
+                    if set_ebook_progress_to_chapter(book_name, filename, abs_in_komga_pos):
+                        sync_ebook_progress(book_name, filename)
                         logger.debug(f"[SYNC] SUCCESS: Updated Komga to chapter #{abs_in_komga_pos}")
                         return {"action": "updated_komga", "target_chapter": abs_in_komga_pos, "source_chapter_name": abs_chapter_name}
 
@@ -1307,8 +1325,8 @@ def sync_bidirectional_progress(book_name):
                             return {"action": "updated_audiobookshelf", "target_chapter": komga_svc_num, "source_chapter_name": komga_chapter_name}
                     elif abs_svc_num > komga_svc_num:
                         logger.debug(f"[SYNC] Using position fallback: ABS #{abs_svc_num} > Komga #{komga_svc_num}")
-                        if set_komga_progress_to_chapter(book_name, filename, abs_svc_num):
-                            sync_komga_progress(book_name, filename)
+                        if set_ebook_progress_to_chapter(book_name, filename, abs_svc_num):
+                            sync_ebook_progress(book_name, filename)
                             logger.debug(f"[SYNC] SUCCESS: Updated Komga to position #{abs_svc_num}")
                             return {"action": "updated_komga", "target_chapter": abs_svc_num, "source_chapter_name": abs_chapter_name}
                     else:
@@ -1340,9 +1358,9 @@ def sync_bidirectional_progress(book_name):
                 # Calculate equivalent Komga chapter based on ABS progress
                 target_komga_chapter = max(1, int(abs_progress * komga_total) + 1)
                 target_komga_chapter = min(target_komga_chapter, komga_total)
-                logger.info(f"[SYNC] {short_name}: ABS ahead by position -> Updating Komga to chapter {target_komga_chapter}")
-                if set_komga_progress_to_chapter(book_name, filename, target_komga_chapter):
-                    sync_komga_progress(book_name, filename)
+                logger.info(f"[SYNC] {short_name}: ABS ahead by position -> Updating ebook library to chapter {target_komga_chapter}")
+                if set_ebook_progress_to_chapter(book_name, filename, target_komga_chapter):
+                    sync_ebook_progress(book_name, filename)
                     return {"action": "updated_komga", "target_chapter": target_komga_chapter, "reason": "position_based"}
                 else:
                     return {"action": "failed", "reason": "komga_update_failed"}
@@ -1361,7 +1379,7 @@ def sync_bidirectional_progress(book_name):
         return {"action": "none", "reason": "equal", "book_chapter": komga_book_chapter}
 
     # Get full chapter lists for name-based matching
-    komga_chapters = get_komga_chapters(book_name, filename)
+    komga_chapters = get_ebook_chapters(book_name, filename)
     abs_chapters = get_audiobookshelf_chapters(book_name)
 
     if not komga_chapters:
@@ -1429,8 +1447,8 @@ def sync_bidirectional_progress(book_name):
                 logger.error(f"[SYNC] ERROR: Cannot find matching chapter in Komga")
                 return {"action": "failed", "reason": "chapter_not_found_in_komga"}
 
-        if set_komga_progress_to_chapter(book_name, filename, target_komga_num):
-            sync_komga_progress(book_name, filename)
+        if set_ebook_progress_to_chapter(book_name, filename, target_komga_num):
+            sync_ebook_progress(book_name, filename)
             logger.debug(f"[SYNC] SUCCESS: Updated Komga to chapter #{target_komga_num}")
             return {"action": "updated_komga", "target_chapter": target_komga_num, "source_chapter_name": abs_chapter_name}
         else:
@@ -1462,7 +1480,7 @@ def sync_all_bidirectional_progress():
 def sync_all_external_data():
     """Sync all books' progress from all external services (Komga + Audiobookshelf)."""
     # Invalidate caches to ensure fresh data
-    invalidate_komga_cache()
+    invalidate_ebook_cache()
 
     if not os.path.isdir(EPUB_DIR):
         return {"komga": [], "audiobookshelf": [], "sync_available": []}
@@ -1480,11 +1498,11 @@ def sync_all_external_data():
         abs_found = False
 
         try:
-            komga_found = sync_komga_progress(book_name, epub_file)
+            komga_found = sync_ebook_progress(book_name, epub_file)
             komga_updated.append(book_name)
-            logger.debug(f"Synced Komga progress for: {book_name}")
+            logger.debug(f"Synced ebook library progress for: {book_name}")
         except Exception as e:
-            logger.warning(f"Could not sync Komga progress for {epub_file}: {e}")
+            logger.warning(f"Could not sync ebook library progress for {epub_file}: {e}")
 
         try:
             abs_found = sync_audiobookshelf_progress(book_name, epub_file)

@@ -102,28 +102,41 @@ def health_audiobookshelf():
 
 
 @health_bp.route("/health/komga")
-def health_komga():
-    """Check Komga service health"""
+def health_ebook_library():
+    """Check ebook library service health (Komga or Grimmory based on EBOOK_LIBRARY env var)."""
     import logging
     logger = logging.getLogger(__name__)
-    
-    base_url = os.environ.get("KOMGA_URL", "")
-    if not base_url:
-        logger.debug("Komga not configured")
-        return jsonify({"status": "not_configured"})
-    try:
-        logger.debug(f"Checking Komga health at: {base_url}/actuator/health")
-        response = requests.get(f"{base_url}/actuator/health", timeout=10)
-        data = response.json()
-        if data.get("status") == "UP":
-            logger.debug("Komga service live")
-            return jsonify({"status": "live"})
-        else:
-            logger.warning(f"Komga service error: {data.get('status', 'unknown')}")
-            return jsonify({"status": "error"})
-    except requests.exceptions.Timeout:
-        logger.warning("Komga service timeout")
-        return jsonify({"status": "timeout"})
-    except Exception as e:
-        logger.warning(f"Komga service offline: {e}")
-        return jsonify({"status": "offline"})
+
+    backend = os.environ.get("EBOOK_LIBRARY", "komga").lower()
+
+    if backend == "grimmory":
+        base_url = os.environ.get("GRIMMORY_URL", "")
+        if not base_url:
+            return jsonify({"status": "not_configured", "backend": "grimmory"})
+        try:
+            from services.library import is_library_available
+            available = is_library_available()
+            return jsonify({"status": "live" if available else "error", "backend": "grimmory"})
+        except requests.exceptions.Timeout:
+            return jsonify({"status": "timeout", "backend": "grimmory"})
+        except Exception as e:
+            logger.warning(f"Grimmory health check failed: {e}")
+            return jsonify({"status": "offline", "backend": "grimmory"})
+    else:
+        base_url = os.environ.get("KOMGA_URL", "")
+        if not base_url:
+            logger.debug("Komga not configured")
+            return jsonify({"status": "not_configured", "backend": "komga"})
+        try:
+            logger.debug(f"Checking Komga health at: {base_url}/actuator/health")
+            response = requests.get(f"{base_url}/actuator/health", timeout=10)
+            data = response.json()
+            if data.get("status") == "UP":
+                return jsonify({"status": "live", "backend": "komga"})
+            else:
+                return jsonify({"status": "error", "backend": "komga"})
+        except requests.exceptions.Timeout:
+            return jsonify({"status": "timeout", "backend": "komga"})
+        except Exception as e:
+            logger.warning(f"Komga service offline: {e}")
+            return jsonify({"status": "offline", "backend": "komga"})

@@ -7,7 +7,7 @@ from metadata import (
     load_metadata,
     save_metadata,
     get_metadata_path,
-    sync_all_komga_data,
+    sync_all_ebook_data,
     sync_all_audiobookshelf_data,
     sync_all_external_data,
 )
@@ -65,7 +65,7 @@ def komga_progress(filename):
 def komga_sync():
     """Trigger a sync of all Komga reading progress to local JSON files."""
     try:
-        updated = sync_all_komga_data()
+        updated = sync_all_ebook_data()
         return jsonify({"success": True, "updated_count": len(updated), "updated": updated})
     except Exception as e:
         return jsonify({"error": str(e)}), 500

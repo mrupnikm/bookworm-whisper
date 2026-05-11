@@ -20,7 +20,7 @@ def _sync_loop():
     try:
         logger.debug("Running initial sync...")
         results = sync_all_external_data()
-        logger.debug(f"Fetched: Komga={len(results['komga'])}, ABS={len(results['audiobookshelf'])} books")
+        logger.debug(f"Fetched: Ebook={len(results['komga'])}, ABS={len(results['audiobookshelf'])} books")
 
         # Check sync differences and perform bi-directional sync
         check_sync_differences()
@@ -41,7 +41,7 @@ def _sync_loop():
         try:
             logger.debug("Running periodic sync...")
             results = sync_all_external_data()
-            logger.debug(f"Fetched: Komga={len(results['komga'])}, ABS={len(results['audiobookshelf'])} books")
+            logger.debug(f"Fetched: Ebook={len(results['komga'])}, ABS={len(results['audiobookshelf'])} books")
 
             # Check sync differences and perform bi-directional sync
             check_sync_differences()
@@ -98,7 +98,7 @@ def manual_sync_all():
         # Sync from both services
         results = sync_all_external_data()
         logger.info(
-            f"Sync complete: Komga={len(results['komga'])} books, "
+            f"Sync complete: Ebook={len(results['komga'])} books, "
             f"Audiobookshelf={len(results['audiobookshelf'])} books"
         )
         

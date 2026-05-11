@@ -10,7 +10,7 @@ from flask import Blueprint, flash, redirect, render_template, request, url_for
 from werkzeug.utils import secure_filename
 
 from config import BASE_DIR, EPUB_DIR, OUTPUT_DIR
-from metadata import get_metadata_path, load_metadata, save_metadata, sync_all_komga_data, sync_all_audiobookshelf_data, sync_all_external_data
+from metadata import get_metadata_path, load_metadata, save_metadata, sync_all_ebook_data, sync_all_audiobookshelf_data, sync_all_external_data
 from process import current_process, process_lock, read_process_output
 from services.sync import manual_sync_all
 
@@ -76,11 +76,11 @@ def index():
     else:
         files = [f for f in os.listdir(EPUB_DIR) if f.lower().endswith(".epub")]
 
-    # Sync Komga data for all books (non-blocking)
+    # Sync ebook library data for all books (non-blocking)
     try:
-        sync_all_komga_data()
+        sync_all_ebook_data()
     except Exception as e:
-        logger.warning(f"Failed to sync Komga data: {e}")
+        logger.warning(f"Failed to sync ebook library data: {e}")
 
     # Load metadata for each file
     book_metadata = {}
@@ -252,7 +252,7 @@ def sync_all():
                 flash(f"Bi-directional sync: All {len(bi_results)} books already in sync")
                 
             # Also show data sync results
-            flash(f"Data sync: Komga ({len(sync_results.get('komga', []))} books), Audiobookshelf ({len(sync_results.get('audiobookshelf', []))} books)")
+            flash(f"Data sync: Ebook library ({len(sync_results.get('komga', []))} books), Audiobookshelf ({len(sync_results.get('audiobookshelf', []))} books)")
         else:
             flash(f"Error during bi-directional sync: {result.get('error', 'Unknown error')}")
     except Exception as e:
