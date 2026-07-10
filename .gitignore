@@ -68,3 +68,5 @@ desktop.ini
 *.swp
 *.swo
 
+grimmory/
+mariadb/
