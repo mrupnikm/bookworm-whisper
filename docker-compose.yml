@@ -25,15 +25,27 @@ services:
     restart: unless-stopped
 
   bookworm-whisper:
+    build: .
     image: bookworm-whisper
     container_name: bookworm-whisper
     # user: "1000:1000" # UID:GID - adjust to match your media user/group (run 'id' to check)
     environment:
-      - OPENAI_BASE_URL=http://hornet:8880/v1
+      - OPENAI_BASE_URL=${OPENAI_BASE_URL:-http://kokoro:8880/v1}
+
+      # Ebook library backend: "komga" (default) or "grimmory"
+      - EBOOK_LIBRARY=${EBOOK_LIBRARY:-komga}
+
+      # Komga (used when EBOOK_LIBRARY=komga)
       - KOMGA_URL=http://komga:25600
       # - KOMGA_API_KEY=
+
+      # Grimmory (used when EBOOK_LIBRARY=grimmory)
+      - GRIMMORY_URL=http://grimmory:${BOOKLORE_PORT:-6060}
+      - GRIMMORY_USERNAME=${GRIMMORY_USERNAME}
+      - GRIMMORY_PASSWORD=${GRIMMORY_PASSWORD}
+
       - AUDIOBOOKSHELF_URL=http://audiobookshelf:80
-      # - AUDIOBOOKSHELF_API_KEY=
+      - AUDIOBOOKSHELF_API_KEY=${AUDIOBOOKSHELF_API_KEY}
       - GLOBAL_SYNC_TIME=300 # Sync interval in seconds (0 to disable)
     ports:
       - 5001:5000
@@ -45,28 +57,76 @@ services:
         condition: service_healthy
     restart: unless-stopped
 
-  komga:
-    image: gotson/komga
-    container_name: komga
-    # user: "1000:1000"
-    volumes:
-      - ./komga:/config
-      - ./books:/data
-    ports:
-      - 25600:25600
+  # ---------------------------------------------------------------------------
+  # Ebook library option A: Komga (set EBOOK_LIBRARY=komga)
+  # ---------------------------------------------------------------------------
+  # komga:
+  #   image: gotson/komga
+  #   container_name: komga
+  #   # user: "1000:1000"
+  #   volumes:
+  #     - ./komga:/config
+  #     - ./books:/data
+  #   ports:
+  #     - 25600:25600
+  #   environment:
+  #     - TZ=${TZ:-Europe/London}
+  #   healthcheck:
+  #     test:
+  #       [
+  #         "CMD-SHELL",
+  #         "curl -f http://localhost:25600/actuator/health || exit 1",
+  #       ]
+  #     interval: 30s
+  #     timeout: 10s
+  #     retries: 3
+  #     start_period: 30s
+  #   restart: unless-stopped
+
+  # ---------------------------------------------------------------------------
+  # Ebook library option B: Grimmory + MariaDB (set EBOOK_LIBRARY=grimmory)
+  # ---------------------------------------------------------------------------
+  grimmory:
+    image: grimmory/grimmory:latest
+    container_name: grimmory
     environment:
-      - TZ=Europe/London
-    healthcheck:
-      test:
-        [
-          "CMD-SHELL",
-          "curl -f http://localhost:25600/actuator/health || exit 1",
-        ]
-      interval: 30s
-      timeout: 10s
-      retries: 3
-      start_period: 30s
+      - USER_ID=${APP_USER_ID}
+      - GROUP_ID=${APP_GROUP_ID}
+      - TZ=${TZ:-Europe/London}
+      - DATABASE_URL=${DATABASE_URL}
+      - DATABASE_USERNAME=${DB_USER}
+      - DATABASE_PASSWORD=${DB_PASSWORD}
+      - BOOKLORE_PORT=${BOOKLORE_PORT:-6060}
+    depends_on:
+      mariadb:
+        condition: service_healthy
+    ports:
+      - "${BOOKLORE_PORT:-6060}:${BOOKLORE_PORT:-6060}"
+    volumes:
+      - grimmory_data:/app/data
+      - ./books:/books
+      - grimmory_bookdrop:/bookdrop
     restart: unless-stopped
+
+  mariadb:
+    image: lscr.io/linuxserver/mariadb:11.4.5
+    container_name: mariadb
+    environment:
+      - PUID=${DB_USER_ID}
+      - PGID=${DB_GROUP_ID}
+      - TZ=${TZ:-Europe/London}
+      - MYSQL_ROOT_PASSWORD=${MYSQL_ROOT_PASSWORD}
+      - MYSQL_DATABASE=${MYSQL_DATABASE}
+      - MYSQL_USER=${DB_USER}
+      - MYSQL_PASSWORD=${DB_PASSWORD}
+    volumes:
+      - mariadb_data:/config
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "mariadb-admin", "ping", "-h", "localhost"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
 
   audiobookshelf:
     image: ghcr.io/advplyr/audiobookshelf:latest
@@ -76,9 +136,15 @@ services:
       - 13378:80
     volumes:
       - ./output:/audiobooks:rw
-      # - </path/to/podcasts>:/podcasts
-      - ./audiobookshelf/config:/config:rw
-      - ./audiobookshelf/metadata:/metadata:rw
+      - abs_config:/config
+      - abs_metadata:/metadata
     environment:
-      - TZ=Europe/London
+      - TZ=${TZ:-Europe/London}
     restart: unless-stopped
+
+volumes:
+  mariadb_data:
+  grimmory_data:
+  grimmory_bookdrop:
+  abs_config:
+  abs_metadata:

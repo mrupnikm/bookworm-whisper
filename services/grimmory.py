@@ -421,13 +421,17 @@ def get_current_chapter(book_id, current_page, pages_total):
             for variant in _extract_href_variants(href):
                 href_to_chapter[variant] = chapter_info
 
-        # Use epubProgress.href for accurate chapter detection
+        # Use readProgress float from the progress endpoint for chapter estimation.
+        # Grimmory's GET /progress returns {"readProgress": 0-1, "readStatus": ...}
+        # — there is no epubProgress.href field in the response.
+        read_progress = 0.0
         r = _authenticated_get(
             f"{base_url}/api/v1/app/books/{book_id}/progress",
             timeout=10,
         )
         if r is not None and r.status_code == 200:
             progress_data = r.json()
+            # Keep href attempt in case a future API version adds it
             epub_progress = progress_data.get("epubProgress") or {}
             prog_href = epub_progress.get("href", "")
             if prog_href:
@@ -440,11 +444,13 @@ def get_current_chapter(book_id, current_page, pages_total):
                             "chapter_num": chapter_info[1],
                             "num_chapters": num_chapters,
                         }
+            read_progress = progress_data.get("readProgress") or 0.0
 
-        # Fallback: estimate from page progress ratio
-        if pages_total > 0 and num_chapters > 0:
-            progress_ratio = current_page / pages_total
-            estimated = max(1, min(num_chapters, int(progress_ratio * num_chapters) + 1))
+        # Estimate chapter from readProgress (0-1 float) — primary path for Grimmory
+        if read_progress > 0 and num_chapters > 0:
+            estimated = max(1, min(num_chapters, int(read_progress * num_chapters) + 1))
+        elif pages_total > 0 and num_chapters > 0:
+            estimated = max(1, min(num_chapters, int(current_page / pages_total * num_chapters) + 1))
         else:
             estimated = 1
 
@@ -484,12 +490,8 @@ def _enrich_with_chapter(book):
         )
         if chapter_info:
             result["num_chapters"] = chapter_info["num_chapters"]
-            if result["pages_read"] > 0:
-                result["chapter"] = chapter_info["chapter_name"]
-                result["current_chapter_num"] = chapter_info["chapter_num"]
-            else:
-                result["chapter"] = chapter_info.get("chapter_name")
-                result["current_chapter_num"] = 1 if chapter_info["num_chapters"] > 0 else 0
+            result["chapter"] = chapter_info.get("chapter_name")
+            result["current_chapter_num"] = chapter_info["chapter_num"]
 
     return result
 

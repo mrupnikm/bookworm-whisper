@@ -341,10 +341,10 @@ function fetchAudiobookshelfProgress(filename, row) {
         // Show indicator for missing data
         const errorType = data.error || data.status;
         if (chapterEl) {
-          if (errorType === 'not_configured' || errorType === 'unavailable') {
+          if (errorType === 'not_configured') {
             chapterEl.textContent = 'Not configured';
             chapterEl.style.color = '#9ca3af';
-          } else if (errorType === 'not_found' || errorType === 'no_audiobook') {
+          } else if (errorType === 'not_found' || errorType === 'no_audiobook' || errorType === 'unavailable') {
             chapterEl.textContent = 'No audiobook';
             chapterEl.style.color = '#9ca3af';
           } else {

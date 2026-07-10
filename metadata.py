@@ -185,8 +185,9 @@ def load_metadata(metadata_path):
 
 
 def save_metadata(metadata_path, metadata):
-    """Save metadata to JSON file atomically."""
-    tmp_path = metadata_path + ".tmp"
+    """Save metadata to JSON file atomically using a unique tmp name to avoid concurrent-write races."""
+    import uuid
+    tmp_path = metadata_path + f".tmp.{uuid.uuid4().hex[:8]}"
     with open(tmp_path, "w") as f:
         json.dump(metadata, f, indent=2)
     os.replace(tmp_path, metadata_path)
@@ -258,8 +259,10 @@ def update_reading_progress(book_name, source="komga", **progress_data):
     if source not in metadata["reading_progress"]:
         metadata["reading_progress"][source] = {}
     
-    # Update the specific source's progress
+    # Update the specific source's progress; clear stale error if this is a successful update
     metadata["reading_progress"][source].update(progress_data)
+    if progress_data.get("found"):
+        metadata["reading_progress"][source].pop("error", None)
     metadata["reading_progress"][source]["last_updated"] = datetime.now().isoformat()
     
     metadata["last_updated"] = datetime.now().isoformat()
